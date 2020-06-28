@@ -3,6 +3,7 @@ import moderngl
 import numpy as np
 from pyrr import Matrix44, Quaternion, Vector3, vector
 
+
 class Camera():
 
     def __init__(self, ratio):
@@ -12,7 +13,7 @@ class Camera():
         self._ratio = ratio
         self.build_projection()
 
-        self._camera_position = Vector3([0.0, 0.0, -40.0])
+        self._camera_position = Vector3([50.0, 50.0, -70.0])
         self._camera_front = Vector3([0.0, 0.0, 1.0])
         self._camera_up = Vector3([0.0, 1.0, 0.0])
         self._cameras_target = (self._camera_position + self._camera_front)
@@ -42,7 +43,7 @@ class Camera():
         self._camera_position = self._camera_position + vector.normalize(self._camera_front ^ self._camera_up) * x
         self.build_look_at()
 
-    def strafe_up(self,y=0.1):
+    def strafe_up(self, y=0.1):
         self._camera_position = self._camera_position + self._camera_up * y
         self.build_look_at()
 
@@ -85,11 +86,14 @@ class Camera():
             self._z_far)
 
 
-def grid(size, steps):
-    u = np.repeat(np.linspace(-size, size, steps), 2)
-    v = np.tile([-size, size], steps)
-    w = np.zeros(steps * 2)
-    return np.concatenate([np.dstack([u, v, w]), np.dstack([v, u, w])])
+def grid(size):
+    matrix = np.zeros(size * size * 2)
+    for i in range(size):
+        for j in range(size):
+            tmp = 2 * (i * size + j)
+            matrix[tmp] = j
+            matrix[tmp + 1] = i
+    return matrix
 
 
 class PerspectiveProjection(mglw.WindowConfig):
@@ -101,59 +105,77 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.prog = self.ctx.program(
             vertex_shader='''
                 #version 330
+                layout(location = 0) in vec2 a_position;
                 uniform mat4 Mvp;
-                in vec3 in_vert;
+                out vec3 v_color;
                 void main() {
-                    gl_Position = Mvp * vec4(in_vert, 1.0);
-                }
+                float x = a_position.x;
+			    float z = a_position.y;
+		        float y = 20 * atan((x - 50) * (z - 50));
+			    float dx = abs(-20 * (-50 + z) / (1 + (-50 + x) * (-50 + x) * (-50 + z) * (-50 + z)));
+			    float dz = abs(-20 * (-50 + x) / (1 + (-50 + x) * (-50 + x) * (-50 + z) * (-50 + z)));
+			    float dy = 1.0;
+			    v_color = normalize(vec3(dx, dy, dz));
+		        gl_Position = Mvp * vec4(x, y, z, 1.0);
+		        }
             ''',
             fragment_shader='''
                 #version 330
+                in vec3 v_color;
                 out vec4 f_color;
                 void main() {
-                    f_color = vec4(0.1, 0.1, 0.1, 1.0);
+                    f_color = vec4(v_color, 1.0);
                 }
             ''',
         )
 
         self.camera = Camera(self.aspect_ratio)
         self.mvp = self.prog['Mvp']
-        self.vbo = self.ctx.buffer(grid(15, 100).astype('f4').tobytes())
-        self.vao = self.ctx.simple_vertex_array(self.prog, self.vbo, 'in_vert')
+        self.vbo = self.ctx.buffer(grid(100).astype('f4').tobytes())
+        self.vao = self.ctx.simple_vertex_array(self.prog, self.vbo, 'a_position')
         self.states = {
-            self.wnd.keys.W: False,     # forward
-            self.wnd.keys.S: False,     # backwards
-            self.wnd.keys.UP: False,    # strafe Up
+            self.wnd.keys.W: False,  # forward
+            self.wnd.keys.S: False,  # backwards
+            self.wnd.keys.UP: False,  # strafe Up
             self.wnd.keys.DOWN: False,  # strafe Down
-            self.wnd.keys.A: False,     # strafe left
-            self.wnd.keys.D: False,     # strafe right
-            self.wnd.keys.Q: False,     # rotate left
-            self.wnd.keys.E: False,     # rotare right
-            self.wnd.keys.Z: False,     # rotare up
-            self.wnd.keys.X: False,     # rotare down
-            self.wnd.mouse.left: False,
+            self.wnd.keys.LEFT: False,  # strafe left
+            self.wnd.keys.RIGHT: False,  # strafe right
+            self.wnd.keys.Q: False,     #zoom out
+            self.wnd.keys.E: False,     #zoom in
+            self.wnd.keys.A: False,     # rotate left
+            self.wnd.keys.D: False,  # rotare right
+            self.wnd.keys.Z: False,  # rotare up
+            self.wnd.keys.X: False,  # rotare down
+            self.wnd.mouse.left: False, #drag left mouse=rotate
+            self.wnd.mouse.right: False, #drag right mouse=strafe
         }
 
-    #def mouse_position_event(self, x, y, dx, dy):
-        #print("Mouse position:", x, y, dx, dy)
+    # def mouse_position_event(self, x, y, dx, dy):
+    # print("Mouse position:", x, y, dx, dy)
 
     def mouse_drag_event(self, x, y, dx, dy):
-        if dy<0: self.camera.rotate_up(-dy/10)
-        if dy>0: self.camera.rotate_down(dy/10)
-        if dx>0: self.camera.rotate_right(dx/10)
-        if dx<0: self.camera.rotate_left(-dx/10)
-
+        if self.wnd._mouse_buttons.left == True:
+            if dy < 0: self.camera.rotate_up(-dy / 10)
+            if dy > 0: self.camera.rotate_down(dy / 10)
+            if dx > 0: self.camera.rotate_right(-dx / 10)
+            if dx < 0: self.camera.rotate_left(dx / 10)
+        if self.wnd._mouse_buttons.right == True:
+            if dy < 0: self.camera.strafe_up(dy / 10)
+            if dy > 0: self.camera.strafe_down(-dy / 10)
+            if dx > 0: self.camera.strafe_right(-dx / 10)
+            if dx < 0: self.camera.strafe_left(dx / 10)
 
     def mouse_scroll_event(self, x_offset: float, y_offset: float):
-        if y_offset>0: self.camera.zoom_in(y_offset)
-        elif y_offset<0: self.camera.zoom_out(-y_offset)
-
+        if y_offset > 0:
+            self.camera.move_forward(y_offset)
+        elif y_offset < 0:
+            self.camera.move_backwards(-y_offset)
 
     #def mouse_press_event(self, x, y, button):
         #print("Mouse button {} pressed at {}, {}".format(button, x, y))
 
-    #def mouse_release_event(self, x: int, y: int, button: int):
-        #print("Mouse button {} released at {}, {}".format(button, x, y))
+    # def mouse_release_event(self, x: int, y: int, button: int):
+    # print("Mouse button {} released at {}, {}".format(button, x, y))
 
     def move_camera(self):
         if self.states.get(self.wnd.keys.W):
@@ -168,16 +190,16 @@ class PerspectiveProjection(mglw.WindowConfig):
         if self.states.get(self.wnd.keys.DOWN):
             self.camera.strafe_down()
 
-        if self.states.get(self.wnd.keys.A):
+        if self.states.get(self.wnd.keys.LEFT):
             self.camera.strafe_left()
 
-        if self.states.get(self.wnd.keys.D):
+        if self.states.get(self.wnd.keys.RIGHT):
             self.camera.strafe_right()
 
-        if self.states.get(self.wnd.keys.Q):
+        if self.states.get(self.wnd.keys.A):
             self.camera.rotate_left()
 
-        if self.states.get(self.wnd.keys.E):
+        if self.states.get(self.wnd.keys.D):
             self.camera.rotate_right()
 
         if self.states.get(self.wnd.keys.Z):
@@ -186,8 +208,11 @@ class PerspectiveProjection(mglw.WindowConfig):
         if self.states.get(self.wnd.keys.X):
             self.camera.rotate_down()
 
-        if self.states.get(self.wnd.mouse.left):
-            self.camera.move_forward()
+        if self.states.get(self.wnd.keys.Q):
+            self.camera.zoom_out()
+
+        if self.states.get(self.wnd.keys.E):
+            self.camera.zoom_in()
 
 
     def key_event(self, key, action, modifiers):
