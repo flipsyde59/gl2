@@ -1,7 +1,7 @@
 import moderngl_window as mglw
 import moderngl
 import numpy as np
-from pyrr import Matrix33, Matrix44, Quaternion, Vector3, vector
+from pyrr import Matrix44, Quaternion, Vector3, vector
 
 N=100
 
@@ -10,11 +10,11 @@ class Camera():
     def __init__(self, ratio):
         self._field_of_view_degrees = 60.0
         self._z_near = 0.1
-        self._z_far = 100
+        self._z_far = 1000
         self._ratio = ratio
         self.build_projection()
 
-        self._camera_position = Vector3([50.0, 50.0, -70.0])
+        self._camera_position = Vector3([0.0, 0.0, -1.0])
         self._camera_front = Vector3([0.0, 0.0, 1.0])
         self._camera_up = Vector3([0.0, 1.0, 0.0])
         self._cameras_target = (self._camera_position + self._camera_front)
@@ -87,30 +87,6 @@ class Camera():
             self._z_far)
 
 
-def grid(size):                             #generator of net
-    matrix = np.zeros(size * size * 2)
-    for i in range(size):
-        for j in range(size):
-            tmp = 2 * (i * size + j)
-            matrix[tmp] = j                 #x
-            matrix[tmp + 1] = i             #z
-    return matrix
-
-def indexes(size):
-    matrix = np.zeros((size-1)*(size-1)*6)
-    for i in range(size-1):
-        for j in range(size-1):
-            tmp = 6 * (i * (size - 1) + j)
-            current = i * size + j
-            next_ = (i + 1) * size + j
-            matrix[tmp] = current
-            matrix[tmp + 1] = current + 1
-            matrix[tmp + 2] = next_ + 1
-            matrix[tmp + 3] = next_ + 1
-            matrix[tmp + 4] = next_
-            matrix[tmp + 5] = current
-    return matrix
-
 class PerspectiveProjection(mglw.WindowConfig):
     gl_version = (3, 3)
 
@@ -122,16 +98,15 @@ class PerspectiveProjection(mglw.WindowConfig):
                 #version 330
                 layout(location = 0) in vec2 a_position;
                 uniform mat4 Mvp;
-                uniform mat3 Mn;
                 out vec3 v_color;
                 void main() {
                 float x = a_position.x;
 			    float z = a_position.y;
-		        float y = -cos(-1-(x*x+z*z))-exp(0.2-(x*x+z*z));
-			    float dx = abs(-2*exp(0.2 - x*x - z*z)*x + 2*x*sin(1 + x*x + z*z));
-			    float dz = abs(-2*exp(0.2 - x*x - z*z)*z + 2*z*sin(1 + x*x + z*z));
+		        float y = 5/(1+x*x)+5/(1+z*z);
+			    float dx = abs(10*x/((1+x*x)*(1+x*x)));
+			    float dz = abs(10*z/((1+z*z)*(1+z*z)));
 			    float dy = 1.0;
-			    v_color = normalize(Mn * vec3(dx, dy, dz));
+			    v_color = normalize(vec3(dx, dy, dz));
 		        gl_Position = Mvp * vec4(x, y, z, 1.0);
 		        }
             ''',
@@ -147,11 +122,27 @@ class PerspectiveProjection(mglw.WindowConfig):
 
         self.camera = Camera(self.aspect_ratio)
         self.mvp = self.prog['Mvp']
-        self.mn = self.prog['Mn']
-        self.vbo = self.ctx.buffer(grid(N).astype('f4').tobytes())
-        self.ibo = self.ctx.buffer(indexes(N).astype('f4').tobytes())
-        self.vao = self.ctx.simple_vertex_array(self.prog, self.vbo, 'a_position')
-
+        vertices = []
+        for i in range(N):
+            for j in range(N):
+                vertices.append(j)
+                vertices.append(i)
+        self.vertices1=np.array(vertices)
+        self.vbo = self.ctx.buffer(self.vertices1.astype('f4').tobytes()*4)
+        render_indicies=[]
+        for i in range(N-1):
+            a = N * i
+            for j in range(N-1):
+                render_indicies.append(a)
+                render_indicies.append(a+1)
+                render_indicies.append(N+a+1)
+                render_indicies.append(N+a+1)
+                render_indicies.append(N+a)
+                render_indicies.append(a)
+                a+=1
+        render_indicies1=np.array(render_indicies)
+        self.index_buffer = self.ctx.buffer(render_indicies1.astype('i4').tobytes()*4)
+        self.vao = self.ctx.simple_vertex_array(self.prog, self.vbo, 'a_position', index_buffer=self.index_buffer)
         self.states = {
             self.wnd.keys.W: False,  # forward
             self.wnd.keys.S: False,  # backwards
@@ -168,9 +159,6 @@ class PerspectiveProjection(mglw.WindowConfig):
             self.wnd.mouse.left: False, #drag left mouse=rotate
             self.wnd.mouse.right: False, #drag right mouse=strafe
         }
-        #self.prog.release()
-        #self.vbo.release()
-        #self.vao.release()
 
     # def mouse_position_event(self, x, y, dx, dy):
     # print("Mouse position:", x, y, dx, dy)
@@ -248,10 +236,9 @@ class PerspectiveProjection(mglw.WindowConfig):
 
         self.ctx.clear(1.0, 1.0, 1.0)
         self.ctx.enable(moderngl.DEPTH_TEST)
-        self.mvp.write((self.camera.mat_projection * self.camera.mat_lookat).astype('f4').tobytes())
-        self.mn.write(np.linalg.inv(Matrix33(self.camera.mat_lookat)).transpose().astype('f4').tobytes())
-        self.vao.render()#moderngl.LINES
 
+        self.mvp.write((self.camera.mat_projection * self.camera.mat_lookat).astype('f4').tobytes())
+        self.vao.render()
 
 
 if __name__ == '__main__':
