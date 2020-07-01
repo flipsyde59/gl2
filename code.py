@@ -14,8 +14,8 @@ class Camera():
         self._ratio = ratio
         self.build_projection()
 
-        self._camera_position = Vector3([0.0, 0.0, -1.0])
-        self._camera_front = Vector3([0.0, 0.0, 1.0])
+        self._camera_position = Vector3([-20.0, 100.0, -20.0])
+        self._camera_front = Vector3([50.0, -50.0, 50.0])
         self._camera_up = Vector3([0.0, 1.0, 0.0])
         self._cameras_target = (self._camera_position + self._camera_front)
         self.build_look_at()
@@ -100,11 +100,11 @@ class PerspectiveProjection(mglw.WindowConfig):
                 uniform mat4 Mvp;
                 out vec3 v_color;
                 void main() {
-                float x = a_position.x;
-			    float z = a_position.y;
-		        float y = 5/(1+x*x)+5/(1+z*z);
-			    float dx = abs(10*x/((1+x*x)*(1+x*x)));
-			    float dz = abs(10*z/((1+z*z)*(1+z*z)));
+                float x = 50-a_position.x;
+			    float z = 50-a_position.y;
+		        float y = 50/(1+x*x)+50/(1+z*z);
+			    float dx = abs(100*x/((1+x*x)*(1+x*x)));
+			    float dz = abs(100*z/((1+z*z)*(1+z*z)));
 			    float dy = 1.0;
 			    v_color = normalize(vec3(dx, dy, dz));
 		        gl_Position = Mvp * vec4(x, y, z, 1.0);
