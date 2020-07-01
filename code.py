@@ -134,8 +134,8 @@ class PerspectiveProjection(mglw.WindowConfig):
                 float d = max(dot(l, n), 0.1);
                 vec3 h = normalize(l + e);
                 float s = pow(max(dot(h, n), 0.0), 20.0);
-                float temp = cos(length(v_textureCoord)*60.0);
-                vec4 color = mix(texture(map_first, v_textureCoord),texture(map_second, v_textureCoord), temp);//
+                float temp = 0.5;
+                vec4 color = mix(texture(map_first, v_textureCoord),texture(map_second, v_textureCoord), temp);
                 vec3 linColor = color.xyz * d + vec3(s);
                 f_color = vec4(pow(linColor.x, gamma), pow(linColor.y, gamma), pow(linColor.z, gamma), 1.0);
                 }
@@ -146,9 +146,8 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.mvp = self.prog['Mvp']
         self.mn = self.prog['Mn']
         self.mv = self.prog['Mv']
-
-        #self.map_first = self.prog['map_first']
-        #self.map_second = self.prog['map_second']
+        self.prog['map_first'] = 0
+        self.prog['map_second'] = 1
         vertices = []
         for i in range(N):
             for j in range(N):
@@ -267,8 +266,6 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.index_buffer.release()
         self.texture1.release()
         self.texture2.release()
-        self.sampler1.release()
-        self.sampler2.release()
         self.ctx.release()
 
     def render(self, time, frame_time):
@@ -280,7 +277,6 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.mv.write(self.camera.mat_lookat.astype('f4').tobytes())
         self.mvp.write((self.camera.mat_projection * self.camera.mat_lookat).astype('f4').tobytes())
         self.prog['N'].value = N
-        self.texture1.use()
         self.vao.render()
 
 
