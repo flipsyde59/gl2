@@ -3,6 +3,7 @@ import moderngl
 import numpy as np
 from pyrr import Matrix44, Quaternion, Vector3, vector, Matrix33
 from PIL import Image
+import time
 
 N=100
 
@@ -125,7 +126,7 @@ class PerspectiveProjection(mglw.WindowConfig):
                 in vec2 v_textureCoord;
                 uniform sampler2D map_first;
                 uniform sampler2D map_second;
-
+                uniform int timer;
                 void main() {
                 const float gamma = 2.2;
                 vec3 n = normalize(v_norm);
@@ -134,8 +135,7 @@ class PerspectiveProjection(mglw.WindowConfig):
                 float d = max(dot(l, n), 0.1);
                 vec3 h = normalize(l + e);
                 float s = pow(max(dot(h, n), 0.0), 20.0);
-                float temp = 0.5;
-                vec4 color = mix(texture(map_first, v_textureCoord),texture(map_second, v_textureCoord), temp);
+                vec4 color = mix(texture(map_first, v_textureCoord),texture(map_second, v_textureCoord), abs((timer-30.0)/30.0));
                 vec3 linColor = color.xyz * d + vec3(s);
                 f_color = vec4(pow(linColor.x, gamma), pow(linColor.y, gamma), pow(linColor.z, gamma), 1.0);
                 }
@@ -146,8 +146,8 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.mvp = self.prog['Mvp']
         self.mn = self.prog['Mn']
         self.mv = self.prog['Mv']
-        self.prog['map_first'] = 0
-        self.prog['map_second'] = 1
+        self.prog['map_first'] = 0 #location 0
+        self.prog['map_second'] = 1 #location 1
         vertices = []
         for i in range(N):
             for j in range(N):
@@ -268,7 +268,7 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.texture2.release()
         self.ctx.release()
 
-    def render(self, time, frame_time):
+    def render(self, _time, frame_time):
         self.move_camera()
 
         self.ctx.clear(1.0, 1.0, 1.0)
@@ -277,8 +277,8 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.mv.write(self.camera.mat_lookat.astype('f4').tobytes())
         self.mvp.write((self.camera.mat_projection * self.camera.mat_lookat).astype('f4').tobytes())
         self.prog['N'].value = N
+        self.prog['timer'].value = time.localtime().tm_sec
         self.vao.render()
-
 
 
 if __name__ == '__main__':
