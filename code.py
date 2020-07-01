@@ -1,7 +1,7 @@
 import moderngl_window as mglw
 import moderngl
 import numpy as np
-from pyrr import Matrix44, Quaternion, Vector3, vector
+from pyrr import Matrix44, Quaternion, Vector3, vector, Matrix33
 
 N=100
 
@@ -98,6 +98,7 @@ class PerspectiveProjection(mglw.WindowConfig):
                 #version 330
                 layout(location = 0) in vec2 a_position;
                 uniform mat4 Mvp;
+                uniform mat3 Mn;
                 out vec3 v_color;
                 void main() {
                 float x = 50-a_position.x;
@@ -106,7 +107,7 @@ class PerspectiveProjection(mglw.WindowConfig):
 			    float dx = abs(100*x/((1+x*x)*(1+x*x)));
 			    float dz = abs(100*z/((1+z*z)*(1+z*z)));
 			    float dy = 1.0;
-			    v_color = normalize(vec3(dx, dy, dz));
+			    v_color = normalize(Mn*vec3(dx, dy, dz));
 		        gl_Position = Mvp * vec4(x, y, z, 1.0);
 		        }
             ''',
@@ -122,6 +123,7 @@ class PerspectiveProjection(mglw.WindowConfig):
 
         self.camera = Camera(self.aspect_ratio)
         self.mvp = self.prog['Mvp']
+        self.mn = self.prog['Mn']
         vertices = []
         for i in range(N):
             for j in range(N):
@@ -236,7 +238,7 @@ class PerspectiveProjection(mglw.WindowConfig):
 
         self.ctx.clear(1.0, 1.0, 1.0)
         self.ctx.enable(moderngl.DEPTH_TEST)
-
+        self.mn.write(Matrix33(self.camera.mat_lookat).inverse.transpose().astype('f4').tobytes())
         self.mvp.write((self.camera.mat_projection * self.camera.mat_lookat).astype('f4').tobytes())
         self.vao.render()
 
