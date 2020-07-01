@@ -2,6 +2,7 @@ import moderngl_window as mglw
 import moderngl
 import numpy as np
 from pyrr import Matrix44, Quaternion, Vector3, vector, Matrix33
+from PIL import Image
 
 N=100
 
@@ -100,8 +101,11 @@ class PerspectiveProjection(mglw.WindowConfig):
                 uniform mat4 Mvp;
                 uniform mat3 Mn;
                 uniform mat4 Mv;
+                uniform int N;
                 out vec3 v_norm;
                 out vec3 v_pos;
+                //in vec2 a_textureCoord;
+                out vec2 v_textureCoord;
                 void main() {
                 float x = 50-a_position.x;
 			    float z = 50-a_position.y;
@@ -118,6 +122,10 @@ class PerspectiveProjection(mglw.WindowConfig):
                 in vec3 v_norm;
                 in vec3 v_pos;
                 out vec4 f_color;
+                in vec2 v_textureCoord;
+                uniform sampler2D map_first;
+                uniform sampler2D map_second;
+
                 void main() {
                 const float gamma = 2.2;
                 vec3 n = normalize(v_norm);
@@ -126,8 +134,10 @@ class PerspectiveProjection(mglw.WindowConfig):
                 float d = max(dot(l, n), 0.1);
                 vec3 h = normalize(l + e);
                 float s = pow(max(dot(h, n), 0.0), 20.0);
-                vec3 linColor = vec3(0.0, 1.0, 0.4) * d + vec3(s);
-                f_color = vec4(pow(linColor.x, 1 / gamma), pow(linColor.y, 1 / gamma), pow(linColor.z, 1 / gamma), 1.0);
+                float temp = cos(length(v_textureCoord)*60.0);
+                vec4 color = mix(texture(map_first, v_textureCoord),texture(map_second, v_textureCoord), temp);//
+                vec3 linColor = color.xyz * d + vec3(s);
+                f_color = vec4(pow(linColor.x, gamma), pow(linColor.y, gamma), pow(linColor.z, gamma), 1.0);
                 }
             ''',
         )
@@ -136,6 +146,9 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.mvp = self.prog['Mvp']
         self.mn = self.prog['Mn']
         self.mv = self.prog['Mv']
+
+        #self.map_first = self.prog['map_first']
+        #self.map_second = self.prog['map_second']
         vertices = []
         for i in range(N):
             for j in range(N):
@@ -252,6 +265,11 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.prog.release()
         self.vao.release()
         self.index_buffer.release()
+        self.texture1.release()
+        self.texture2.release()
+        self.sampler1.release()
+        self.sampler2.release()
+        self.ctx.release()
 
     def render(self, time, frame_time):
         self.move_camera()
@@ -261,6 +279,8 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.mn.write(Matrix33(self.camera.mat_lookat).inverse.transpose().astype('f4').tobytes())
         self.mv.write(self.camera.mat_lookat.astype('f4').tobytes())
         self.mvp.write((self.camera.mat_projection * self.camera.mat_lookat).astype('f4').tobytes())
+        self.prog['N'].value = N
+        self.texture1.use()
         self.vao.render()
 
 
