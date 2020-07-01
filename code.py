@@ -96,10 +96,12 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.prog = self.ctx.program(
             vertex_shader='''
                 #version 330
-                layout(location = 0) in vec2 a_position;
+                in vec2 a_position;
                 uniform mat4 Mvp;
                 uniform mat3 Mn;
-                out vec3 v_color;
+                uniform mat4 Mv;
+                out vec3 v_norm;
+                out vec3 v_pos;
                 void main() {
                 float x = 50-a_position.x;
 			    float z = 50-a_position.y;
@@ -113,10 +115,19 @@ class PerspectiveProjection(mglw.WindowConfig):
             ''',
             fragment_shader='''
                 #version 330
-                in vec3 v_color;
+                in vec3 v_norm;
+                in vec3 v_pos;
                 out vec4 f_color;
                 void main() {
-                    f_color = vec4(v_color, 1.0);
+                const float gamma = 2.2;
+                vec3 n = normalize(v_norm);
+                vec3 l = normalize(vec3(30.0, 30.0, 3.0) - v_pos);
+                vec3 e = normalize(-v_pos);
+                float d = max(dot(l, n), 0.1);
+                vec3 h = normalize(l + e);
+                float s = pow(max(dot(h, n), 0.0), 20.0);
+                vec3 linColor = vec3(0.0, 1.0, 0.4) * d + vec3(s);
+                f_color = vec4(pow(linColor.x, 1 / gamma), pow(linColor.y, 1 / gamma), pow(linColor.z, 1 / gamma), 1.0);
                 }
             ''',
         )
@@ -124,6 +135,7 @@ class PerspectiveProjection(mglw.WindowConfig):
         self.camera = Camera(self.aspect_ratio)
         self.mvp = self.prog['Mvp']
         self.mn = self.prog['Mn']
+        self.mv = self.prog['Mv']
         vertices = []
         for i in range(N):
             for j in range(N):
@@ -161,6 +173,7 @@ class PerspectiveProjection(mglw.WindowConfig):
             self.wnd.mouse.left: False, #drag left mouse=rotate
             self.wnd.mouse.right: False, #drag right mouse=strafe
         }
+
 
     # def mouse_position_event(self, x, y, dx, dy):
     # print("Mouse position:", x, y, dx, dy)
@@ -233,14 +246,23 @@ class PerspectiveProjection(mglw.WindowConfig):
         else:
             self.states[key] = False
 
+
+    def close(self):
+        self.vbo.release()
+        self.prog.release()
+        self.vao.release()
+        self.index_buffer.release()
+
     def render(self, time, frame_time):
         self.move_camera()
 
         self.ctx.clear(1.0, 1.0, 1.0)
         self.ctx.enable(moderngl.DEPTH_TEST)
         self.mn.write(Matrix33(self.camera.mat_lookat).inverse.transpose().astype('f4').tobytes())
+        self.mv.write(self.camera.mat_lookat.astype('f4').tobytes())
         self.mvp.write((self.camera.mat_projection * self.camera.mat_lookat).astype('f4').tobytes())
         self.vao.render()
+
 
 
 if __name__ == '__main__':
