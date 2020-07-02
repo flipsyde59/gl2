@@ -31,11 +31,11 @@ class Camera():
         self.build_projection()
 
     def move_forward(self, step=0.1):
-        self._camera_position = self._camera_position + self._camera_front * step
+        self._camera_position = self._camera_position + self._camera_front * step/10
         self.build_look_at()
 
     def move_backwards(self, step=0.1):
-        self._camera_position = self._camera_position - self._camera_front * step
+        self._camera_position = self._camera_position - self._camera_front * step/10
         self.build_look_at()
 
     def strafe_left(self, x=0.1):
@@ -109,14 +109,17 @@ class PerspectiveProjection(mglw.WindowConfig):
                 out vec2 v_textureCoord;
                 void main() {
                 float x = 50-a_position.x;
-			    float z = 50-a_position.y;
-		        float y = 50/(1+x*x)+50/(1+z*z);
-			    float dx = abs(100*x/((1+x*x)*(1+x*x)));
-			    float dz = abs(100*z/((1+z*z)*(1+z*z)));
-			    float dy = 1.0;
-			    v_color = normalize(Mn*vec3(dx, dy, dz));
-		        gl_Position = Mvp * vec4(x, y, z, 1.0);
-		        }
+                float z = 50-a_position.y;
+                float y = 50*(1/(1+x*x)+1/(1+z*z));
+                float dx = 100*x/((1+x*x)*(1+x*x));
+                float dz = 100*z/((1+z*z)*(1+z*z));
+                float dy = 1.0;
+                v_norm = normalize(Mn*vec3(dx, dy, dz));
+                vec4 pos = vec4(x,y,z,1.0);
+                gl_Position = Mvp * pos;
+                v_pos = (Mv*pos).xyz;
+                v_textureCoord = a_position/(N-1);
+                }
             ''',
             fragment_shader='''
                 #version 330
@@ -153,8 +156,7 @@ class PerspectiveProjection(mglw.WindowConfig):
             for j in range(N):
                 vertices.append(j)
                 vertices.append(i)
-        self.vertices1=np.array(vertices)
-        self.vbo = self.ctx.buffer(self.vertices1.astype('f4').tobytes()*4)
+        self.vbo = self.ctx.buffer(np.array(vertices).astype('f4').tobytes())
         render_indicies=[]
         for i in range(N-1):
             a = N * i
@@ -166,9 +168,19 @@ class PerspectiveProjection(mglw.WindowConfig):
                 render_indicies.append(N+a)
                 render_indicies.append(a)
                 a+=1
-        render_indicies1=np.array(render_indicies)
-        self.index_buffer = self.ctx.buffer(render_indicies1.astype('i4').tobytes()*4)
-        self.vao = self.ctx.simple_vertex_array(self.prog, self.vbo, 'a_position', index_buffer=self.index_buffer)
+        self.index_buffer = self.ctx.buffer(np.array(render_indicies).astype('i4').tobytes())
+        vao_content = [
+            (self.vbo, '2f', 'a_position'),
+        ]
+        self.vao = self.ctx.vertex_array(self.prog, vao_content, self.index_buffer)
+
+        img = Image.open('1.jpg')
+        self.texture1 = self.ctx.texture(img.size, 3, img.tobytes())
+        self.texture1.use(location=0)
+        img2 = Image.open('2.jpg')
+        self.texture2 = self.ctx.texture(img2.size, 3, img2.tobytes())
+        self.texture2.use(location=1)
+
         self.states = {
             self.wnd.keys.W: False,  # forward
             self.wnd.keys.S: False,  # backwards
